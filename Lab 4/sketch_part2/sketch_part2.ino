@@ -1,159 +1,126 @@
-// EENG 348: Digital Systems - Lab 3
+// EENG 348: Digital Systems - Lab 4
 // Daniel Esguerra and Mawuli Akpalu
 
-/**********SKETCH_PART1************/
+/********* SKETCH_PART1 ***********/
 
-// At 20 degrees Celsius, the speed
-// of sound is 343 centimeters per
-// microsecond (cm/us)
-#define SPEED_OF_SOUND 0.0343
+#include <stdbool.h>
 
-// Maximum distance the ulstrasonic
-// rage finder can measure in cm
-#define MAX_DISTANCE 60
+// Include code provided by Prof. Manohar
+#include "concurreny.h"
 
-// Declare global variables
-int redPin = 3;
-int greenPin = 5;
-int bluePin = 6;
+struct process_state
+{
+    unsigned int sp;            // stack pointer
+    struct process_state* next; // pointer to next process
+};
 
-int echoPin = 13;
-int triggerPin = 10;
-int photocellPin = A0;
+struct lock_state
+{
+    bool locked;
+};
 
-int redOutput = 0;
-int blueOutput = 0;
-int greenOutput = 0;
-int brightOutput = 0;
-
-double duration = 0;
-double distance = 0;
-double analogInput = 0;
+void p1();
+void p2();
 
 void setup()
 {
-  // Set the baud rate for output
-  Serial.begin(9600);
+    // Set the baud rate for output
+    Serial.begin(9600);
 
-  // Set the echo and trigger pins
-  pinMode(echoPin, INPUT);
-  pinMode(triggerPin, OUTPUT);
+    // Set the current process to NULL
+    current_process = NULL;
+
+    // Return 0 on failure to create Process 1
+    if (process_create(p1, 64) < 0)
+        return 0;
+
+    // Return 0 on failure to create Process 2
+    if (process_create(p1, 64) < 0)
+        return 0;
 }
 
 void loop()
 {
-  // Update the analog input value
-  analogInput = analogRead(photocellPin);
+    // Begin executing processes
+    process_start();
 
-  // Convert the analog input to a digital value
-  // First divide by the max number for analogInput
-  // (1023) to get a percentage of max voltage 
-  // (5.0 V) at the inputPin.
-  // Then multiply this percentage by the max LED
-  // brightness (255) in order to express the
-  // the analogInput as a digital bit pattern
-  brightOutput = (int)(analogInput / 1023 * 255);
-
-  // Send a pulse to initiate a measurement from
-  // the ultrasonic range finder
-  sendPulse();
-
-  // Measure the duration at which the echo pin
-  // is set to HIGH, which indicates how long it
-  // took for the ultrasonic wave to return to the
-  // range finder
-  duration = pulseIn(echoPin, HIGH);
-
-  // Translate the duration into the distance
-  // travelled by the ultrasonic wave in one
-  // direction
-  distance = timeToDistance(duration);
-
-  // Get the appropriate red value that is dependent
-  // on the distance
-  redOutput = getRedValue(distance);
-
-  // Set the green value as the opposite brightness
-  // of the red output
-  greenOutput = brightOutput - redOutput;
-
-  // Set the blue value to LOW since it is never
-  // in use for this part
-  blueOutput = 0;
-
-  // Write the LED outputs to the LED
-  // Since the anode of the LED is connected
-  // to 5V (HIGH), the values sent to the 
-  // ground pins of the LED must be the opposite
-  // of the intensity expected
-  analogWrite(redPin, 255 - redOutput);
-  analogWrite(greenPin, 255 - greenOutput);
-  analogWrite(bluePin, 255 - blueOutput);
-  
-  // Print the current analog input value
-  Serial.print("Current Analog Input Value: ");
-  Serial.println(analogInput);
-
-  // Print the current brightness level
-  Serial.print("Current Brightness Level: ");
-  Serial.println(brightOutput);
-
-  // Print the current distance measured
-  Serial.print("Current Distance in Centimeters: ");
-  Serial.println(distance);
-  
-  // Print the current LED output intensities
-  Serial.print("Current red LED Output Intensity: ");
-  Serial.println(redOutput);
-  Serial.print("Current green LED Output Intensity: ");
-  Serial.println(greenOutput);
-  Serial.print("Current blue LED Output Intensity: ");
-  Serial.println(blueOutput);
-  Serial.println();
-
-  // Loop every second (1000 milliseconds)
-  delay(1000);
+    // Stall after all processes have executed
+    while (1);
 }
 
-// Send a pulse to initiate a measurement from
-// the ultrasonic range finder for the length
-// specified in the datasheet
-void sendPulse()
+int process_create(void (*f)(void), int n)
 {
-  digitalWrite(triggerPin, LOW);
-  delayMicroseconds(2);
-  digitalWrite(triggerPin, HIGH);
-  delayMicroseconds(10);
-  digitalWrite(triggerPin, LOW);
+    process_t* new_process;
+
+    // Allocate space for a new process struct
+    new_process = malloc(sizeof(process_t));
+
+    // Return error on failure to allocate space
+    if (new_process == NULL)
+    {
+        Serial.println("ERROR 0x01: Failure to allocate memory");
+        return -1;
+    }
+
+    // Initialize new process f() with an n-byte stack
+    process_init(f, n);
+
+    // Return 0 on success
+    return 0;
 }
 
-// Converts the time elapsed in microseconds
-// to a distance traveled in centimeters
-double timeToDistance(double duration)
+void process_start(void)
 {
-  // Divide the time in two since the time
-  // covers both the outward and return trip
-  // of the ultrasonic wave
-  duration = duration / 2;
+    // Initialize concurrent data structures
 
-  // Multiply the time by the speed of sound in cm/us
-  // to get how many centimeters the ultrasonic wave
-  // traveled in the elapsed time and return this value
-  return duration * SPEED_OF_SOUND;
+    // Start the execution of the next process
+    process_begin();
 }
 
-// Takes the distance and returns a number between 0
-// and 255 depending on how the distance relates to
-// the maximum distance the range finder can measure
-int getRedValue(double distance)
+unsigned int process_select(unsigned int cursp)
 {
-  // If the distance is greater than the MAX_DISTANCE
-  // then set the red output to the maximum brightness
-  if (distance > MAX_DISTANCE)
-    return brightOutput;
+    process_t* next_process;
+
+    // Assign the pointer to the next process
+    next_process = current_process->next;
+
+    // Assign the next process to the current process
+    current_process = next_process;                         /** DOES THIS NEED TO BE UPDATED??? **/
+
+    // Return 0 if no process is ready to execute
+    if (next_process == NULL)
+        return 0;
+
+    // Return the stack pointer for the next process
+    return next_process->sp;
+}
+
+void lock_init(lock_t *l)
+{
+
+}
+
+void lock_aquire(lock_t *l)
+{
+    if (l->locked)
+        yield(); // block
     
-  // Since the anode of the LED is always set to
-  // HIGH, set the brightOutput variable to the
-  // opposite of the above calculation
-  return (int)(distance / MAX_DISTANCE * brightOutput);
+    l->locked = true;
+}
+
+void lock_release(lock_t *l)
+{
+    l->locked = false;
+}
+
+// Process 1
+void p1(void)
+{
+    return;
+}
+
+// Process 2
+void p2(void)
+{
+    return;
 }

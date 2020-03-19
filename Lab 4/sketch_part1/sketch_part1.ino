@@ -1,52 +1,100 @@
-// EENG 348: Digital Systems - Lab 3
+// EENG 348: Digital Systems - Lab 4
 // Daniel Esguerra and Mawuli Akpalu
 
-/**********SKETCH_PART1************/
+/********* SKETCH_PART1 ***********/
 
-// Declare global variables
-int ledPin = 3;
-int inputPin = A0;
-int ledVoltage = 0;
-int digitalOutput = 0;
-double analogInput = 0;
+#include "concurreny.h" // code provided by Prof. Manohar
+
+struct process_state
+{
+    unsigned int sp;            // stack pointer
+    struct process_state* next; // pointer to next process
+};
+
+void p1();
+void p2();
 
 void setup()
 {
-  // Set the baud rate for output
-  Serial.begin(9600);
+    // Set the baud rate for output
+    Serial.begin(9600);
+
+    // Set the current process to NULL
+    current_process = NULL;
+
+    // Return 0 on failure to create Process 1
+    if (process_create(p1, 64) < 0)
+        return 0;
+
+    // Return 0 on failure to create Process 2
+    if (process_create(p1, 64) < 0)
+        return 0;
 }
 
 void loop()
 {
-  // Update the analog input value
-  // In order to read the analog input
-  // without using the function analogRead(),
-  // one could set an analog pin as an input
-  // pin and read the value at that pin
-  analogInput = analogRead(inputPin);
+    // Begin executing processes
+    process_start();
 
-  // Convert the analog input to a digital value
-  // First divide by the max number for analogInput
-  // (1023) to get a percentage of max voltage 
-  // (5.0 V) at the inputPin.
-  // Then multiply this percentage by the max LED
-  // brightness (255) in order to express the
-  // the analogInput as a digital bit pattern
-  digitalOutput = (int)(analogInput / 1023 * 255);
+    // Stall after all processes have executed
+    while (1);
+}
 
-  // Set the LED voltage using the value of
-  // digitalOutput and the PWM of the Arduino
-  analogWrite(ledPin, digitalOutput);
-  
-  // Print the current analog input value
-  Serial.print("Current Analog Input Value: ");
-  Serial.println(analogInput);
+int process_create(void (*f)(void), int n)
+{
+    process_t* new_process;
 
-  // Print the current digital output value
-  Serial.print("Current Digital Output Value: ");
-  Serial.println(digitalOutput);
-  Serial.println();
-  
-  // Loop every second (1000 milliseconds)
-  delay(1000);
+    // Allocate space for a new process struct
+    new_process = malloc(sizeof(process_t));
+
+    // Return error on failure to allocate space
+    if (new_process == NULL)
+    {
+        Serial.println("ERROR 0x01: Failure to allocate memory");
+        return -1;
+    }
+
+    // Initialize new process f() with an n-byte stack
+    process_init(f, n);
+
+    // Return 0 on success
+    return 0;
+}
+
+void process_start(void)
+{
+    // Initialize concurrent data structures
+
+    // Start the execution of the next process
+    process_begin();
+}
+
+unsigned int process_select(unsigned int cursp)
+{
+    process_t* next_process;
+
+    // Assign the pointer to the next process
+    next_process = current_process->next;
+
+    // Assign the next process to the current process
+    current_process = next_process;                         /** DOES THIS NEED TO BE UPDATED??? **/
+
+    // Return 0 if no process is ready to execute
+    if (next_process == NULL)
+        return 0;
+
+    // Return the stack pointer for the next process
+    return next_process->sp;
+}
+
+// Process 1
+void p1(void)
+{
+    return;
+}
+
+// Process 2
+void p2(void)
+{
+    return;
 }
